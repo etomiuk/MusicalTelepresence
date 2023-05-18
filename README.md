@@ -8,5 +8,6 @@
 - [One last PTP technique using C++ - see PTPSync for PTP using the IDE](https://support.thinklucid.com/app-note-helios2-and-triton-sync/)
 #### Misc
 - [Creating a device using a serial number + convert the image to openCV format - scroll to the bottom](https://support.thinklucid.com/knowledgebase/using-lucids-arenaview-with-jupyterlab/)
+- [Node attributes](https://support.thinklucid.com/triton-tri054s/)
 
 
