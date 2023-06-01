@@ -12,8 +12,8 @@
 #### OpenCV
 - [Reading and Writing videos](https://learnopencv.com/reading-and-writing-videos-using-opencv/#read-from-image-sequence)
 #### Calibration
--[Calibration of Helios to Triton cameras](https://support.thinklucid.com/app-note-helios-3d-point-cloud-with-rgb-color/)
--[Calibration tutorial using OpenCV](https://docs.opencv.org/4.x/d4/d94/tutorial_camera_calibration.html)
+- [Calibration of Helios to Triton cameras](https://support.thinklucid.com/app-note-helios-3d-point-cloud-with-rgb-color/)
+- [Calibration tutorial using OpenCV](https://docs.opencv.org/4.x/d4/d94/tutorial_camera_calibration.html)
 #### Misc
 - [Creating a device using a serial number + convert the image to openCV format - scroll to the bottom](https://support.thinklucid.com/knowledgebase/using-lucids-arenaview-with-jupyterlab/)
 - [Node attributes](https://support.thinklucid.com/triton-tri054s/)
