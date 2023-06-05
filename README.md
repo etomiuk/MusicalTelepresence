@@ -6,9 +6,10 @@
 - [PTP in C++](https://support.thinklucid.com/app-note-multi-camera-synchronization-using-ptp-and-scheduled-action-commands/)
 - [Another PTP technique using C++](https://support.thinklucid.com/app-note-bandwidth-sharing-in-multi-camera-systems/)
 - [One last PTP technique using C++ - see PTPSync for PTP using the IDE](https://support.thinklucid.com/app-note-helios2-and-triton-sync/)
-#### Image theory
+#### Image and View Synthesis theory
 - [Binning and decimation](https://www.get-cameras.com/Pixel-Binning-and-Decimation-(pixel-skipping)-explained#)
 - [Binning in Lucid cameras](https://support.thinklucid.com/knowledgebase/binning-and-decimation-on-lucid-cameras/)
+- [View Synthesis software](https://www.intechopen.com/chapters/80515) and [code](https://gitlab.com/mpeg-i-visual/rvs/-/tree/master/)
 #### OpenCV
 - [Reading and Writing videos](https://learnopencv.com/reading-and-writing-videos-using-opencv/#read-from-image-sequence)
 - [Streaming from single camera](https://docs.opencv.org/4.x/dd/d43/tutorial_py_video_display.html)
