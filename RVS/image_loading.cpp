@@ -95,6 +95,11 @@ Koninklijke Philips N.V., Eindhoven, The Netherlands:
 
 #include <d3d11.h>
 
+//Lucid SDK
+#include "ArenaApi.h"
+#include "SaveApi.h"
+
+
 // OpenGL Variables
 const int width = 640;
 const int height = 480;
@@ -124,6 +129,12 @@ extern HANDLE nextColorFrameEvent;
 // Depth image acquisition 1 The frame event 
 extern HANDLE nextDepthFrameEvent;
 
+//Lucid variables (extern because declared in Pipeline)
+extern Arena::IDevice* RGBcam;
+extern Arena::IDevice* depthCam;
+extern Arena::ISystem* pSystem; //system of cams to open when initiaizing
+extern Arena::IImage* pImageRGB; //images pointers
+extern Arena::IImage* pImageDepth;
 ///////////////////
 // Kinect V2
 /*
@@ -156,7 +167,7 @@ namespace rvs
 			stream.read(reinterpret_cast<char*>(image.data), image.size().area() * image.elemSize());
 		}
 
-		//////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////
 	//Kinect mod
 	//////////////////////////////////////////////////////////////////////
 
@@ -202,6 +213,35 @@ namespace rvs
 		}
 		*/
 		//Get Detph image 
+		cv::Mat getDepthDataLucid() {
+			cv::Mat depth;
+
+			//what to do with input cams numbers??
+			//std::cout << "Getting image from depth ..." << std::endl;
+			pImageDepth = depthCam->GetImage(2000);
+			//std::cout << "Convert image to " << GetPixelFormatName(BGR8) << "\n";
+			//auto pConverted = Arena::ImageFactory::Convert(pImageRGB, BGR8);
+
+			//stored image as matrix
+			depth = cv::Mat((int)pImageDepth->GetHeight(), (int)pImageDepth->GetWidth(), CV_8UC1, (void*)pImageDepth->GetData()); //might need to change dimensions
+			//std::cout << "Converted depth image to cv::Mat" << std::endl;
+
+			if (depth.data == NULL) {
+				std::cout << "depth is null" << std::endl;
+			}
+
+			cv::resize(depth, depth, cv::Size(640, 480), cv::INTER_LINEAR);
+			//std::cout << "resized image" << std::endl;
+			//cv::imshow("RGB image", color);
+			//cv::waitKey(0);
+			//cv::destroyAllWindows(); 
+
+			depthCam->RequeueBuffer(pImageDepth);
+			//requeue image to avoid weird things
+
+			return depth;
+		}
+
 		cv::Mat getDepthData() {
 			// Kinect V2
 			/*
@@ -376,6 +416,36 @@ namespace rvs
 				std::cout << "Buffer length of received texture is bogus\r\n" << std::endl;
 			}
 			
+		}
+
+		cv::Mat getRgbDataLucid() {
+
+			cv::Mat color;
+
+			//what to do with input cams numbers??
+			//std::cout << "Getting image from RGB ..." << std::endl;
+			pImageRGB = RGBcam->GetImage(2000);
+			//std::cout << "Convert image to " << GetPixelFormatName(BGR8) << "\n";
+			auto pConverted = Arena::ImageFactory::Convert(pImageRGB, BGR8);
+
+			//stored image as matrix
+			color = cv::Mat((int)pConverted->GetHeight(), (int)pConverted->GetWidth(), CV_8UC3, (void*)pConverted->GetData()); //might need to change dimensions
+			//std::cout << "Converted RGB image to cv::Mat" << std::endl;
+
+			if (color.data == NULL) {
+				std::cout << "color is null" << std::endl;
+			}
+
+			cv::resize(color, color, cv::Size(640, 480), cv::INTER_LINEAR);
+			//std::cout << "resized image" << std::endl;
+			//cv::imshow("RGB image", color);
+			//cv::waitKey(0);
+			//cv::destroyAllWindows(); 
+
+			RGBcam->RequeueBuffer(pImageRGB);
+			//requeue image to avoid weird things
+
+			return color;
 		}
 
 		// Get RGB Image 
@@ -753,10 +823,12 @@ namespace rvs
 
 		// Normalize to [0, 1]
 		cv::Mat3f color;
+		
 		if (image.depth() == CV_32F) {
 			color = image;
 		}
 		else {
+			
 			image.convertTo(color, CV_32F, 1. / max_level(parameters.getColorBitDepth()));
 		}
 		auto executeTimenorm = double(clock() - startTimenorm) / CLOCKS_PER_SEC;
@@ -780,6 +852,91 @@ namespace rvs
 			<< " sec."
 			<< std::endl;
 
+		return color;
+	}
+
+	cv::Mat3f read_color_lucid(std::string filepath, int frame, Parameters const& parameters)
+	{
+		auto startTimecolor = clock();
+		// Load the image
+		cv::Mat image;
+		image.create(480, 640, CV_8UC3);
+		ColorSpace color_space;
+		if (filepath.substr(filepath.size() - 4, 4) == ".yuv") { //enters this if
+			std::cout << "input cam: " << inputCam << std::endl;
+			image = getRgbDataLucid();
+
+			if (image.empty()) { //check if image acquisition worked
+				throw std::runtime_error("RGB image is empty");
+			}
+
+			//image = read_color_RGB(filepath, parameters);//(filepath, frame, parameters);
+			color_space = ColorSpace::RGB;//YUV;
+		}
+		else if (frame == 0) {
+			color_space = ColorSpace::RGB;
+			image = read_color_RGB(filepath, parameters);
+		}
+		else {
+			throw std::runtime_error("Readig multiple frames not (yet) supported for image files");
+		}
+
+		auto executeTimecolor = double(clock() - startTimecolor) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time color: " << std::fixed << std::setprecision(3) << executeTimecolor
+			<< " sec."
+			<< std::endl;
+		auto startTimecrop = clock();
+
+		// Crop out padded regions
+		if (parameters.getPaddedSize() != parameters.getSize()) {
+			std::cout << "cropping..." << std::endl;
+			image = image(parameters.getCropRegion()).clone();
+		}
+		auto executeTimecrop = double(clock() - startTimecrop) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time crop: " << std::fixed << std::setprecision(3) << executeTimecrop
+			<< " sec."
+			<< std::endl;
+
+		auto startTimenorm = clock();
+
+		// Normalize to [0, 1]
+		cv::Mat3f color;
+		std::cout << image.depth() << std::endl;
+		if (image.depth() == CV_32F) {
+			color = image;
+		}
+		else { //enters this else
+			image.convertTo(color, CV_32F, 1. / max_level(parameters.getColorBitDepth()));
+		}
+
+		auto executeTimenorm = double(clock() - startTimenorm) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time normalize : " << std::fixed << std::setprecision(3) << executeTimenorm
+			<< " sec."
+			<< std::endl;
+
+		auto startTimeconv = clock();
+		// Color space conversion
+		if (color_space == ColorSpace::YUV && g_color_space == ColorSpace::RGB) {
+			std::cout << "yuv conv" << std::endl;
+			cv::cvtColor(color, color, cv::COLOR_YUV2BGR, 3);
+		}
+		else if (color_space == ColorSpace::RGB && g_color_space == ColorSpace::YUV) { //enters this if
+			std::cout << "RGB conv" << std::endl;
+			//cv::cvtColor(color, color, cv::COLOR_BGR2YUV);
+
+		}
+		auto executeTimeconv = double(clock() - startTimeconv) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time color conv: " << std::fixed << std::setprecision(3) << executeTimeconv
+			<< " sec."
+			<< std::endl;
 		return color;
 	}
 
@@ -862,6 +1019,80 @@ namespace rvs
 			<< " sec."
 			<< std::endl;
 		return color;
+	}
+
+	cv::Mat1f read_depth_lucid(std::string filepath, int frame, Parameters const& parameters)
+	{
+		auto startTimedepth = clock();
+		// Load the image
+		//cv::Mat image(parameters.getSize(),cv::IMREAD_UNCHANGED);
+		cv::Mat image;
+		if (filepath.substr(filepath.size() - 4, 4) == ".yuv") {
+			//image = read_depth_YUV(filepath, frame, parameters);
+			image = getDepthDataLucid();
+		}
+		else if (frame == 0) {
+			image = getDepthDataLucid();
+		}
+		else {
+			//throw std::runtime_error("Readig multiple frames not (yet) supported for image files");
+			std::cout << "Reading multiple frames not (yet) supported for image files. Reading first frame" << std::endl;
+			//image = read_depth_RGB(filepath, parameters);
+		}
+		auto executeTimedepth = double(clock() - startTimedepth) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time depth : " << std::fixed << std::setprecision(3) << executeTimedepth
+			<< " sec."
+			<< std::endl;
+
+		auto startTimedcrop = clock();
+		// Crop out padded regions
+		if (parameters.getPaddedSize() != parameters.getSize()) {
+			image = image(parameters.getCropRegion()).clone();
+		}
+		auto executeTimedcrop = double(clock() - startTimedcrop) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time crop depth: " << std::fixed << std::setprecision(3) << executeTimedcrop
+			<< " sec."
+			<< std::endl;
+
+		auto startTimednorm = clock();
+		// Do not manipulate floating-point depth maps (e.g. OpenEXR)
+		if (image.depth() == CV_32F) {
+			return image;
+		}
+
+		// Normalize to [0, 1]
+		cv::Mat1f depth;
+		image.convertTo(depth, CV_32F, 1. / max_level(parameters.getDepthBitDepth()));
+		auto executeTimednorm = double(clock() - startTimednorm) / CLOCKS_PER_SEC;
+		std::cout
+			<< std::endl
+			<< "Load Total Time depth normalize : " << std::fixed << std::setprecision(3) << executeTimednorm
+			<< " sec."
+			<< std::endl;
+		auto startTimegl = clock();
+
+		// 1000 is for 'infinitly far'
+		auto neark = parameters.getDepthRange()[0];
+		auto fark = parameters.getDepthRange()[1];
+		if (fark >= 1000.f) {
+			depth = neark / depth;
+		}
+		else {
+			depth = fark * neark / (neark + depth * (fark - neark));
+		}
+
+		if (parameters.hasInvalidDepth()) {
+			// Level 0 is for 'invalid'
+			// Mark invalid pixels as NaN
+			auto const NaN = std::numeric_limits<float>::quiet_NaN();
+			depth.setTo(NaN, image == 0);
+		}
+
+		return depth;
 	}
 
 	/*

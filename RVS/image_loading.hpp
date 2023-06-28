@@ -84,8 +84,8 @@ namespace rvs
 	@return CV_32FC3 image
 	*/
 	//cv::Mat3f read_color(std::string filepath, int frame, Parameters const& parameters);
-	cv::Mat3f read_color_kinect(std::string filepath, int frame, Parameters const& parameters);						 //changed to kinect color
-
+	//cv::Mat3f read_color_kinect(std::string filepath, int frame, Parameters const& parameters);						 //changed to kinect color
+	cv::Mat3f read_color_lucid(std::string filepath, int frame, Parameters const& parameters);						//changed to lucid depth
 	/**
 	\brief Read a depth image: a exr depth file or a YUV disparity file.
 
@@ -98,7 +98,8 @@ namespace rvs
 	Result may have NaN values to indicate missing depth values
 	*/
 	//cv::Mat1f read_depth(std::string filepath, int frame, Parameters const& parameters);
-	cv::Mat1f read_depth_kinect(std::string filepath, int frame, Parameters const& parameters);							//changed to kinect depth
+	//cv::Mat1f read_depth_kinect(std::string filepath, int frame, Parameters const& parameters);							//changed to kinect depth
+	cv::Mat1f read_depth_lucid(std::string filepath, int frame, Parameters const& parameters);							//change to lucid depth
 	rvs::PolynomialDepth read_polynomial_depth(std::string filepath, int frame, Parameters const& parameters);
 }
 
