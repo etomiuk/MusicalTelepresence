@@ -55,6 +55,7 @@ Koninklijke Philips N.V., Eindhoven, The Netherlands:
 #include <vector>
 #include <memory>
 
+
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
@@ -62,7 +63,6 @@ Koninklijke Philips N.V., Eindhoven, The Netherlands:
 
 ///////////////
 //Kinect V1
-
 #include <opencv2/core/core.hpp>
 #include <gl/glew.h>
 #include <gl/GL.h>
@@ -72,6 +72,7 @@ Koninklijke Philips N.V., Eindhoven, The Netherlands:
 #include <cstdio>
 
 #include <Windows.h>
+#include <conio.h>
 #include <Ole2.h>
 
 #include <NuiApi.h>
@@ -147,7 +148,7 @@ HANDLE nextDepthFrameEvent2 = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 ////////////////////
 // Lucid Variables
-std::vector<Arena::IDevice*> RGBcams;
+std::vector<Arena::IDevice*> RGBCams;
 std::vector<Arena::IDevice*> depthCams;
 
 Arena::IDevice* RGBcam;
@@ -201,13 +202,491 @@ namespace rvs
 #endif
 	}
 
-	
-	void initLucidCam() {
+	bool initLucidCam() { //better non hard coded version of camera initialization
+		
+		std::cout << "Initialize Lucid cameras" << std::endl;
+
+		try {
+			// initialize devices
+			pSystem = Arena::OpenSystem();
+			pSystem->UpdateDevices(100);
+			std::vector<Arena::DeviceInfo> deviceInfos = pSystem->GetDevices(); //list of devices not initialized yet (not pointers)
+			std::cout << "Number of devices: " << deviceInfos.size() << std::endl;
+
+			if (deviceInfos.size() == 0) {
+				std::cout << "No camera connected" << std::endl;
+				return false;
+			}
+			
+			std::vector<GenICam::gcstring> exposureAutoInitials;
+			std::vector<double> exposureTimeInitials;
+			std::vector<bool> ptpEnableInitials;
+			std::vector<GenICam::gcstring> triggerModeInitials;
+			std::vector<GenICam::gcstring> triggerSourceInitials;
+			std::vector<GenICam::gcstring> triggerSelectorInitials;
+			std::vector<GenICam::gcstring> actionUnconditionalModeInitials;
+			std::vector<int64_t> actionSelectorInitials;
+			std::vector<int64_t> actionGroupKeyInitials;
+			std::vector<int64_t> actionGroupMaskInitials;
+			std::vector<GenICam::gcstring> transferControlModeInitials;
+			std::vector<int64_t> packetSizeInitials;
+			//*** should we reset the nodes to their original values?
+			
+			for (auto& deviceInfo : deviceInfos) {
+
+				std::cout << "Creating device " << deviceInfo.SerialNumber() << std::endl;
+				Arena::IDevice* pDevice = pSystem->CreateDevice(deviceInfo); //initialises the device
+				std::cout << "created device " << std::endl;
+
+
+				//assign to depth or rgb list and set node values
+				GenICam::gcstring deviceModelName = Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "DeviceModelName");
+				std::string deviceModelName_tmp = deviceModelName.c_str();
+				//std::cout << "Device: " << Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "DeviceSerialNumber") << std::endl;
+				if (deviceModelName_tmp.rfind("HTP", 0) == 0) {
+					depthCams.push_back(pDevice);
+				}
+				else {
+					RGBCams.push_back(pDevice);
+				}
+			}
+
+				/*
+				// Set acquisition mode
+				//    Set acquisition mode before starting the stream. Starting the stream
+				//    requires the acquisition mode to be set beforehand. The acquisition
+				//    mode controls the number of images a device acquires once the stream
+				//    has been started. Setting the acquisition mode to 'Continuous' keeps
+				//    the stream from stopping. This example returns the camera to its
+				//    initial acquisition mode near the end of the example.
+				std::cout << "Set acquisition mode to 'Continuous'\n";
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "AcquisitionMode", "Continuous");
+
+				// Set buffer handling mode
+				//    Set buffer handling mode before starting the stream. Starting the
+				//    stream requires the buffer handling mode to be set beforehand. The
+				//    buffer handling mode determines the order and behavior of buffers in
+				//    the underlying stream engine. Setting the buffer handling mode to
+				//    'NewestOnly' ensures the most recent image is delivered, even if it
+				//    means skipping frames.
+
+				std::cout << "Set buffer handling mode to 'NewestOnly'\n";
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetTLStreamNodeMap(), "StreamBufferHandlingMode", "NewestOnly");
+
+				// Enable stream auto negotiate packet size
+				//    Setting the stream packet size is done before starting the stream.
+				//    Setting the stream to automatically negotiate packet size instructs
+				//    the camera to receive the largest packet size that the system will
+				//    allow. This generally increases frame rate and results in fewer
+				//    interrupts per image, thereby reducing CPU load on the host system.
+				//    Ethernet settings may also be manually changed to allow for a
+				//    larger packet size.
+				std::cout << "Enable stream to auto negotiate packet size\n";
+				Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
+
+				// Enable stream packet resend
+				//    Enable stream packet resend before starting the stream. Images are
+				//    sent from the camera to the host in packets using UDP protocol,
+				//    which includes a header image number, packet number, and timestamp
+				//    information. If a packet is missed while receiving an image, a
+				//    packet resend is requested and this information is used to retrieve
+				//    and redeliver the missing packet in the correct order.
+				std::cout << "Enable stream packet resend\n";
+				Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
+
+				// Start stream
+				//    Start the stream before grabbing any images. Starting the stream
+				//    allocates buffers, which can be passed in as an argument (default: 10),
+				//    and begins filling them with data. Starting the stream blocks write
+				//    access to many features such as width, height, and pixel format, as
+				//    well as acquisition and buffer handling modes, among others. The stream
+				//    needs to be stopped later.
+
+			}
+			*/
+				// get node values that will be changed in order to return their values at
+	// the end of the example
+				
+			
+			for (size_t i = 0; i < RGBCams.size(); i++){
+				Arena::IDevice* pDevice = RGBCams.at(i);
+				// exposure
+				//exposureAutoInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "ExposureAuto"));
+				//exposureTimeInitials.push_back(Arena::GetNodeValue<double>(pDevice->GetNodeMap(), "ExposureTime"));
+				// trigger
+				//triggerModeInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerMode"));
+				//triggerSourceInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerSource"));
+				//triggerSelectorInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerSelector"));
+				// action commands
+				//actionUnconditionalModeInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "ActionUnconditionalMode"));
+				//actionSelectorInitials.push_back(Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionSelector"));
+				//actionGroupKeyInitials.push_back(Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionGroupKey"));
+				//actionGroupMaskInitials.push_back(Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionGroupMask"));
+				// ptp
+				//ptpEnableInitials.push_back(Arena::GetNodeValue<bool>(pDevice->GetNodeMap(), "PtpEnable"));
+				// Transfer control
+				transferControlModeInitials.push_back(Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferControlMode"));
+				// packet size
+				packetSizeInitials.push_back(Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "DeviceStreamChannelPacketSize"));
+			}
+
+			// prepare all cameras
+			std::cout << "Setup\n";
+
+			for (size_t i = 0; i < RGBCams.size(); i++){
+				Arena::IDevice* pDevice = RGBCams.at(i);
+				GenICam::gcstring deviceSerialNumber = Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "DeviceSerialNumber");
+
+				std::cout << "Prepare camera " << deviceSerialNumber << "\n";
+
+				// Manually set exposure time
+				//    In order to get synchronized images, the exposure time must be
+				//    synchronized as well.
+
+				/*
+				std::cout << "Exposure: ";
+
+				Arena::SetNodeValue<GenICam::gcstring>(
+					pDevice->GetNodeMap(),
+					"ExposureAuto",
+					"Off");
+
+				Arena::SetNodeValue<double>(
+					pDevice->GetNodeMap(),
+					"ExposureTime",
+					500.0);
+
+				std::cout << Arena::GetNodeValue<double>(pDevice->GetNodeMap(), "ExposureTime") << "\n";
+				
+				// Enable trigger mode and set source to action
+				//    To trigger a single image using action commands, trigger mode must
+				//    be enabled, the source set to an action command, and the selector
+				//    set to the start of a frame.
+				std::cout << "Trigger: ";
+
+				Arena::SetNodeValue<GenICam::gcstring>(
+					pDevice->GetNodeMap(),
+					"TriggerSelector",
+					"FrameStart");
+
+				Arena::SetNodeValue<GenICam::gcstring>(
+					pDevice->GetNodeMap(),
+					"TriggerMode",
+					"On");
+
+				Arena::SetNodeValue<GenICam::gcstring>(
+					pDevice->GetNodeMap(),
+					"TriggerSource",
+					"Action0");
+
+				std::cout << Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerSource") << "\n";
+				
+				// Prepare the device to receive an action command
+				//    Action unconditional mode allows a camera to accept action from an
+				//    application without write access. The device key, group key, and
+				//    group mask must match similar settings in the system's TL node map.
+				std::cout << "Action commands: ";
+
+				Arena::SetNodeValue<GenICam::gcstring>(
+					pDevice->GetNodeMap(),
+					"ActionUnconditionalMode",
+					"On");
+
+				Arena::SetNodeValue<int64_t>(
+					pDevice->GetNodeMap(),
+					"ActionSelector",
+					0);
+
+				Arena::SetNodeValue<int64_t>(
+					pDevice->GetNodeMap(),
+					"ActionDeviceKey",
+					1);
+
+				Arena::SetNodeValue<int64_t>(
+					pDevice->GetNodeMap(),
+					"ActionGroupKey",
+					1);
+
+				Arena::SetNodeValue<int64_t>(
+					pDevice->GetNodeMap(),
+					"ActionGroupMask",
+					1);
+
+				std::cout << "prepared\n";
+				
+				// Synchronize devices by enabling PTP
+				//    Enabling PTP on multiple devices causes them to negotiate amongst
+				//    themselves so that there is a single master device while all the
+				//    rest become slaves. The slaves' clocks all synchronize to the
+				//    master's clock.
+				std::cout << "PTP: ";
+
+				Arena::SetNodeValue<bool>(
+					pDevice->GetNodeMap(),
+					"PtpEnable",
+					true);
+
+				std::cout << (Arena::GetNodeValue<bool>(pDevice->GetNodeMap(), "PtpEnable") ? "enabled" : "disabled") << "\n";
+				*/
+				// Use max supported packet size. We use transfer control to ensure that only one camera
+				//    is transmitting at a time.
+				Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
+
+				// enable stream packet resend
+				Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
+
+				// Enable user controlled transfer control
+				//    Synchronized cameras will begin transmiting images at the same
+				//    time. To avoid missing packets due to collisions, we will use
+				//    transfer control to control when each camera transmits the image.
+
+				std::cout << "Set acquisition mode to 'Continuous'\n";
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "AcquisitionMode", "Continuous");
+
+
+				std::cout << "Transfer Control: ";
+
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferControlMode", "UserControlled");
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferOperationMode", "Continuous");
+				Arena::ExecuteNode(pDevice->GetNodeMap(), "TransferStop");
+
+				std::cout << Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferControlMode") << " - " << Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferOperationMode") << " - "
+					<< "Transfer Stopped\n";
+			}
+
+			/*
+			// prepare system
+			std::cout << "Prepare system\n";
+
+			// Prepare the system to broadcast an action command
+			//    The device key, group key, group mask, and target IP must all match
+			//    similar settings in the devices' node maps. The target IP acts as a
+			//    mask.
+			std::cout << "Action commands: ";
+
+			Arena::SetNodeValue<int64_t>(
+				pSystem->GetTLSystemNodeMap(),
+				"ActionCommandDeviceKey",
+				1);
+
+			Arena::SetNodeValue<int64_t>(
+				pSystem->GetTLSystemNodeMap(),
+				"ActionCommandGroupKey",
+				1);
+
+			Arena::SetNodeValue<int64_t>(
+				pSystem->GetTLSystemNodeMap(),
+				"ActionCommandGroupMask",
+				1);
+
+			Arena::SetNodeValue<int64_t>(
+				pSystem->GetTLSystemNodeMap(),
+				"ActionCommandTargetIP",
+				0xFFFFFFFF);
+
+			std::cout << "prepared\n";
+
+			// Wait for devices to negotiate their PTP relationship
+			//    Before starting any PTP-dependent actions, it is important to wait for
+			//    the devices to complete their negotiation; otherwise, the devices may
+			//    not yet be synced. Depending on the initial PTP state of each camera,
+			//    it can take about 40 seconds for all devices to autonegotiate. Below,
+			//    we wait for the PTP status of each device until there is only one
+			//    'Master' and the rest are all 'Slaves'. During the negotiation phase,
+			//    multiple devices may initially come up as Master so we will wait until
+			//    the ptp negotiation completes.
+			std::cout << "Wait for devices to negotiate. This can take up to about 40s.\n";
+
+			std::vector<GenICam::gcstring> serials;
+			int i = 0;
+			do
+			{
+				bool masterFound = false;
+				bool restartSyncCheck = false;
+
+				// check devices
+				for (size_t j = 0; j < RGBCams.size(); j++)
+				{
+					Arena::IDevice* pDevice = RGBCams.at(j);
+
+					// get PTP status
+					GenICam::gcstring ptpStatus = Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "PtpStatus");
+
+					if (ptpStatus == "Master")
+					{
+						if (masterFound)
+						{
+							// Multiple masters -- ptp negotiation is not complete
+							restartSyncCheck = true;
+							break;
+						}
+
+						masterFound = true;
+					}
+					else if (ptpStatus != "Slave")
+					{
+						// Uncalibrated state -- ptp negotiation is not complete
+						restartSyncCheck = true;
+						break;
+					}
+				}
+
+				// A single master was found and all remaining cameras are slaves
+				if (!restartSyncCheck && masterFound)
+					break;
+
+				std::this_thread::sleep_for(std::chrono::duration<int>(1));
+
+				// for output
+				if (i % 10 == 0)
+					std::cout << "\r" << "\r" << std::flush;
+
+				std::cout << "." << std::flush;
+
+				i++;
+
+			} while (true);
+			*/
+			// start stream
+			
+
+			for (size_t i = 0; i < RGBCams.size(); i++)
+			{
+				std::cout << "\n"
+				<< "Start stream\n";
+				RGBCams.at(i)->StartStream();
+			}
+
+				
+
+			// stop stream
+			std::cout << "Stop stream\n";
+
+			for (size_t i = 0; i < RGBCams.size(); i++)
+			{
+				RGBCams.at(i)->StopStream();
+			}
+
+			// return nodes to their initial values
+			for (size_t i = 0; i < RGBCams.size(); i++)
+			{
+				Arena::IDevice* pDevice = RGBCams.at(i);
+
+				// packet size affects the exposure range so we restore it first
+				Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "DeviceStreamChannelPacketSize", packetSizeInitials.at(i));
+
+				// exposure
+				if (exposureAutoInitials.at(i) == "Off")
+				{
+					Arena::SetNodeValue<double>(pDevice->GetNodeMap(), "ExposureTime", exposureTimeInitials.at(i));
+				}
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "ExposureAuto", exposureAutoInitials.at(i));
+				// trigger
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerSelector", triggerSelectorInitials.at(i));
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerSource", triggerSourceInitials.at(i));
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TriggerMode", triggerModeInitials.at(i));
+				// action commands
+				Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionGroupMask", actionGroupMaskInitials.at(i));
+				Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionGroupKey", actionGroupKeyInitials.at(i));
+				Arena::SetNodeValue<int64_t>(pDevice->GetNodeMap(), "ActionSelector", actionSelectorInitials.at(i));
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "ActionUnconditionalMode", actionUnconditionalModeInitials.at(i));
+				// ptp
+				Arena::SetNodeValue<bool>(pDevice->GetNodeMap(), "PtpEnable", ptpEnableInitials.at(i));
+
+				// Transfer Control
+				Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "TransferControlMode", transferControlModeInitials.at(i));
+			}
+			/*
+			
+			std::cout << depthCams.size() << std::endl;
+			std::cout << RGBCams.size() << std::endl;
+
+			//start streaming from cams
+			for (auto& pDevice : RGBCams) {
+				pDevice->StartStream();
+				std::cout << "Start stream\n";
+			}
+
+			for (auto& pDevice : depthCams) {
+				std::cout << "Start stream\n";
+				pDevice->StartStream();
+			}
+			*/
+			
+		}
+
+		catch (GenICam::GenericException& ge)
+		{
+			std::cout << "GenICam exception thrown: " << std::endl;
+
+			//cleanup
+			std::cout << "Stop stream\n";
+			for (auto& device : RGBCams) {
+				std::cout << "device " << Arena::GetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "DeviceSerialNumber").c_str() << " destroyed" << std::endl;
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			for (auto& device : depthCams) {
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			std::cout << "Destroyed Lucid cameras" << std::endl;
+			Arena::CloseSystem(pSystem);
+
+			return false;
+		}
+		catch (std::exception& ex)
+		{
+			std::cout << "Standard exception thrown: " << std::endl;
+
+			//cleanup
+			std::cout << "Stop stream\n";
+			for (auto& device : RGBCams) {
+				std::cout << "device " << Arena::GetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "DeviceSerialNumber").c_str() << " destroyed" << std::endl;
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			for (auto& device : depthCams) {
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			std::cout << "Destroyed Lucid cameras" << std::endl;
+			Arena::CloseSystem(pSystem);
+
+			return false;
+		}
+		catch (...)
+		{
+			std::cout << "Unexpected exception thrown" << std::endl;
+
+			//cleanup
+			std::cout << "Stop stream\n";
+
+			for (auto& device : RGBCams) {
+				std::cout << "device " << Arena::GetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "DeviceSerialNumber").c_str() << " destroyed" << std::endl;
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			for (auto& device : depthCams) {
+				device->StopStream();
+				pSystem->DestroyDevice(device);
+			}
+			std::cout << "Destroyed Lucid cameras" << std::endl;
+			Arena::CloseSystem(pSystem);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	void initLucidCamOld() {
 		// initialize devices 
 		std::cout << "Initialize Lucid cameras" << std::endl;
 		pSystem = Arena::OpenSystem();
 		pSystem->UpdateDevices(100);
-		std::vector<Arena::DeviceInfo> deviceInfos = pSystem->GetDevices(); //list of our devices (not pointers
+		std::vector<Arena::DeviceInfo> deviceInfos = pSystem->GetDevices(); //list of our devices (not pointers)
+		std::cout << "Number of devices: " << deviceInfos.size() << std::endl;
 		if (deviceInfos.size() == 0)
 		{
 			std::cout << "\nNo camera connected\nPress enter to complete\n";
@@ -333,18 +812,10 @@ namespace rvs
 			//    needs to be stopped later.
 			std::cout << "Start stream\n";
 			device->StartStream();
-
-			//***********************to put after we are done acquiring images
-			/*
-			std::cout << "Stop stream\n";
-			device->StopStream();
-
-			// return nodes to their initial values
-			Arena::SetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "AcquisitionMode", acquisitionModeInitial);
-			*/
 		}
 	}
 
+	/*
 	//kinect stuff
 	bool initKinect() {
 
@@ -417,6 +888,7 @@ namespace rvs
 
 		return sensor1;
 	}
+	*/
 
 
 	const char* depthToStr(int depth) {
@@ -510,53 +982,71 @@ namespace rvs
 		auto virtualFrame = 0;
 		auto virtualView = 0;
 
-		initLucidCam();
-
-		
-			//std::cout << "Get image from RGB" << std::endl;
-			//pImageRGB = RGBcam->GetImage(2000); //2000 ms is timeout for taking image - raises error if passed timeout, we put no args and just wait forever
-
-			//std::cout << "Get image from Depth" << std::endl;
-			//pImageDepth = depthCam->GetImage(2000); //these images are not synchronized
-			
-			while (1) {
-				auto startTimeALL = clock();
-				liveView(inputFrame, virtualFrame, virtualView);
-				auto executeTimeALL = double(clock() - startTimeALL) / CLOCKS_PER_SEC;
-				std::cout
-					<< std::endl
-					<< "FULL PASS TIME: " << std::fixed << std::setprecision(3) << executeTimeALL
-					<< " sec."
-					<< std::endl;
-			}
-			//avoid memory leaks
-		
-
-			
-		
-		//obtain image from both cameras (not synchronized right now ummmm)
-		
-
-
-		//after interation of loop requeue images
-		
-		/* CODE TO IEW AN IMAGE USING OPENCV SOMETIMES TURNS OUT WEIRD
-		std::cout << "getting nodemap" << std::endl;
-		GenApi::INodeMap* pNodeMap = depthCam->GetNodeMap();
-		GenICam::gcstring windowName = Arena::GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceModelName");
-
-		Arena::IImage* pImage;
-		cv::Mat img;
-
-		std::cout << "inner loop" << std::endl;
-		pImage = depthCam->GetImage(2000);
-		img = cv::Mat((int)pImage->GetHeight(), (int)pImage->GetWidth(), CV_8UC1, (void*)pImage->GetData());
-
-		cv::imshow(windowName.c_str(), img);
-		cv::waitKey(5000);
-		RGBcam->RequeueBuffer(pImage);
-		cv::destroyAllWindows();
+		/*
+		if (initLucidCam()) {
+			std::cout << "initialization worked :)" << std::endl;
+		}
+		else {
+			std::cout << "initialization broke :(" << std::endl;
+		}
 		*/
+		initLucidCamOld();
+		int flag = 1;
+
+		while (flag) {
+			if (GetKeyState(VK_RETURN) & 0x0D) {
+				std::cout << "Enter key pressed" << std::endl;
+				flag = 0;
+			}
+			auto startTimeALL = clock();
+			liveView(inputFrame, virtualFrame, virtualView);
+			auto executeTimeALL = double(clock() - startTimeALL) / CLOCKS_PER_SEC;
+			std::cout
+				<< std::endl
+				<< "FULL PASS TIME: " << std::fixed << std::setprecision(3) << executeTimeALL
+				<< " sec."
+				<< std::endl;
+
+		}
+		
+
+		/*
+		while (1) {
+			auto startTimeALL = clock();
+			liveView(inputFrame, virtualFrame, virtualView);
+			auto executeTimeALL = double(clock() - startTimeALL) / CLOCKS_PER_SEC;
+			std::cout
+				<< std::endl
+				<< "FULL PASS TIME: " << std::fixed << std::setprecision(3) << executeTimeALL
+				<< " sec."
+				<< std::endl;
+		}
+		*/
+		// clean up
+		std::cout << "Stop stream\n";
+		//RGBcam->StopStream();
+		//depthCam->StopStream();
+
+		// return nodes to their initial values
+		//std::cout << "Reset initial values" << std::endl;
+		//Arena::SetNodeValue<GenICam::gcstring>(RGBcam->GetNodeMap(), "AcquisitionMode", acquisitionModeInitialRGB);
+		//Arena::SetNodeValue<GenICam::gcstring>(depthCam->GetNodeMap(), "AcquisitionMode", acquisitionModeInitialDepth);
+		std::cout << RGBCams.size() << std::endl;
+		for (auto& device : RGBCams) {
+			//device->StopStream();
+			//std::cout << "device " << Arena::GetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "DeviceSerialNumber").c_str() << " stopped stream" << std::endl;
+			pSystem->DestroyDevice(device); //also stops stream
+			std::cout << "device " << Arena::GetNodeValue<GenICam::gcstring>(device->GetNodeMap(), "DeviceSerialNumber").c_str() << " destroyed" << std::endl;
+
+		}
+		for (auto& device : depthCams) {
+			//device->StopStream();
+			pSystem->DestroyDevice(device);
+		}
+		//pSystem->DestroyDevice(RGBcam);
+		//pSystem->DestroyDevice(depthCam);
+		std::cout << "Destroyed Lucid cameras" << std::endl;
+		Arena::CloseSystem(pSystem);
 
 		/*
 		if (initKinect()) {
@@ -583,25 +1073,6 @@ namespace rvs
 			std::cout << "Failed to initialize" << std::endl;
 		}
 		*/
-	
-
-
-		// clean up
-		//
-		std::cout << "Stop stream\n";
-		RGBcam->StopStream();
-		depthCam->StopStream();
-
-		// return nodes to their initial values
-		std::cout << "Reset initial values" << std::endl;
-		Arena::SetNodeValue<GenICam::gcstring>(RGBcam->GetNodeMap(), "AcquisitionMode", acquisitionModeInitialRGB);
-		Arena::SetNodeValue<GenICam::gcstring>(depthCam->GetNodeMap(), "AcquisitionMode", acquisitionModeInitialDepth);
-
-
-		pSystem->DestroyDevice(RGBcam);
-		pSystem->DestroyDevice(depthCam);
-		std::cout << "Destroyed Lucid cameras" << std::endl;
-		Arena::CloseSystem(pSystem);
 	}
 
 	bool Pipeline::wantColor()
