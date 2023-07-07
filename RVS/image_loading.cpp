@@ -78,13 +78,7 @@ Koninklijke Philips N.V., Eindhoven, The Netherlands:
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-
-
 #include <opencv2\opencv.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include<opencv2/core/core.hpp>
-#include<opencv2/highgui/highgui.hpp>
 #include<opencv2/video/video.hpp>
 
 #include<iostream>
@@ -130,11 +124,20 @@ extern HANDLE nextColorFrameEvent;
 extern HANDLE nextDepthFrameEvent;
 
 //Lucid variables (extern because declared in Pipeline)
-extern Arena::IDevice* RGBcam;
-extern Arena::IDevice* depthCam;
+extern Arena::IDevice* RGBcam; //used to reference one of the cameras in the vector of cameras
+extern Arena::IDevice* depthCam; //used to reference one of the depth cameras in the vector of cameras
 extern Arena::ISystem* pSystem; //system of cams to open when initiaizing
-extern Arena::IImage* pImageRGB; //images pointers
+extern Arena::IImage* pImageRGB; //images pointers used before converting to a matrix
 extern Arena::IImage* pImageDepth;
+
+extern std::vector<Arena::IDevice*> cams;
+extern std::vector<Arena::IDevice*> RGBCams;
+extern std::vector<Arena::IDevice*> depthCams;
+
+extern double x_offset_mm; //watch out these apply to on depth cam!
+extern double y_offset_mm;
+extern double z_offset_mm;
+extern double xyz_scale_mm;
 ///////////////////
 // Kinect V2
 /*
@@ -214,32 +217,66 @@ namespace rvs
 		*/
 		//Get Detph image 
 		cv::Mat getDepthDataLucid() {
+			//std::cout << "getting values for depth cam" << std::endl;
 			cv::Mat depth;
-
-			//what to do with input cams numbers??
+			depthCam = depthCams.at(inputCam);
+			
 			//std::cout << "Getting image from depth ..." << std::endl;
 			pImageDepth = depthCam->GetImage(2000);
+			
+			size_t height, width;
+			height = pImageDepth->GetHeight();
+			width = pImageDepth->GetWidth();
+
+			//cv::Mat xyz_mm = cv::Mat((int)height, (int)width, CV_32FC3);
+			cv::Mat intensity_image = cv::Mat((int)height, (int)width, CV_16UC1);
+
+			const uint16_t* input_data;
+			input_data = (uint16_t*)pImageDepth->GetData();
+
+			for (unsigned int ir = 0; ir < height; ++ir)
+			{
+				for (unsigned int ic = 0; ic < width; ++ic)
+				{
+					// Get unsigned 16 bit values for X,Y,Z coordinates
+					ushort x_u16 = input_data[0];
+					ushort y_u16 = input_data[1];
+					ushort z_u16 = input_data[2];
+
+					// Convert 16-bit X,Y,Z to float values in mm
+					//xyz_mm.at<cv::Vec3f>(ir, ic)[0] = (float)(x_u16 * xyz_scale_mm + x_offset_mm);
+					//xyz_mm.at<cv::Vec3f>(ir, ic)[1] = (float)(y_u16 * xyz_scale_mm + y_offset_mm);
+					//xyz_mm.at<cv::Vec3f>(ir, ic)[2] = (float)(z_u16 * xyz_scale_mm + z_offset_mm);
+
+					intensity_image.at<ushort>(ir, ic) = input_data[3]; // // Intensity value
+
+					input_data += 4;
+				}
+			}
+			//std::string filename = "intensity_values.png";
+			//cv::imwrite(filename, intensity_image);
 			//std::cout << "Convert image to " << GetPixelFormatName(BGR8) << "\n";
-			//auto pConverted = Arena::ImageFactory::Convert(pImageRGB, BGR8);
+			//auto pConverted = Arena::ImageFactory::Convert(pImageDepth, Coord3D_ABCY16);
 
 			//stored image as matrix
-			depth = cv::Mat((int)pImageDepth->GetHeight(), (int)pImageDepth->GetWidth(), CV_8UC1, (void*)pImageDepth->GetData()); //might need to change dimensions
+			//depth = cv::Mat((int)pImageDepth->GetHeight(), (int)pImageDepth->GetWidth(), CV_8UC1, (void*)pImageDepth->GetData()); //might need to change dimensions
 			//std::cout << "Converted depth image to cv::Mat" << std::endl;
 
-			if (depth.data == NULL) {
+			if (intensity_image.data == NULL) {
 				std::cout << "depth is null" << std::endl;
 			}
 
-			cv::resize(depth, depth, cv::Size(640, 480), cv::INTER_LINEAR);
+			//cv::resize(depth, depth, cv::Size(640, 480), cv::INTER_LINEAR);
 			//std::cout << "resized image" << std::endl;
-			//cv::imshow("RGB image", color);
+			//cv::imshow("Depth image", intensity_image);
 			//cv::waitKey(0);
 			//cv::destroyAllWindows(); 
 
 			depthCam->RequeueBuffer(pImageDepth);
 			//requeue image to avoid weird things
+			//depthCam->StopStream();
 
-			return depth;
+			return intensity_image;
 		}
 
 		cv::Mat getDepthData() {
@@ -418,16 +455,19 @@ namespace rvs
 			
 		}
 
+		
 		cv::Mat getRgbDataLucid() {
 
 			cv::Mat color;
+			RGBcam = RGBCams.at(inputCam); //comment this out for the old hard coded version
 
-			//what to do with input cams numbers??
 			//std::cout << "Getting image from RGB ..." << std::endl;
+			//Arena::ExecuteNode(RGBcam->GetNodeMap(), "TransferStart");
 			pImageRGB = RGBcam->GetImage(2000);
+			//Arena::ExecuteNode(RGBcam->GetNodeMap(), "TransferStop");
 			//std::cout << "Convert image to " << GetPixelFormatName(BGR8) << "\n";
 			auto pConverted = Arena::ImageFactory::Convert(pImageRGB, BGR8);
-
+			
 			//stored image as matrix
 			color = cv::Mat((int)pConverted->GetHeight(), (int)pConverted->GetWidth(), CV_8UC3, (void*)pConverted->GetData()); //might need to change dimensions
 			//std::cout << "Converted RGB image to cv::Mat" << std::endl;
@@ -438,17 +478,18 @@ namespace rvs
 
 			cv::resize(color, color, cv::Size(640, 480), cv::INTER_LINEAR);
 			//std::cout << "resized image" << std::endl;
+
 			//cv::imshow("RGB image", color);
 			//cv::waitKey(0);
 			//cv::destroyAllWindows(); 
 
 			RGBcam->RequeueBuffer(pImageRGB);
 			//requeue image to avoid weird things
-
+			
 			return color;
 		}
 
-		// Get RGB Image 
+		// Get RGB Image --> for kinect
 		cv::Mat getRgbData() {
 			// Kinect V2
 			/*
@@ -1067,6 +1108,7 @@ namespace rvs
 		// Normalize to [0, 1]
 		cv::Mat1f depth;
 		image.convertTo(depth, CV_32F, 1. / max_level(parameters.getDepthBitDepth()));
+		
 		auto executeTimednorm = double(clock() - startTimednorm) / CLOCKS_PER_SEC;
 		std::cout
 			<< std::endl
